@@ -2,11 +2,11 @@ use anyhow::Result;
 
 use crate::{config, downloader};
 
-pub async fn run(project: Option<&str>) -> Result<()> {
+pub async fn run(project: Option<&str>, cache_dir: Option<&str>) -> Result<()> {
     println!("Pico Build Tool doctor");
     println!("Platform: {}", std::env::consts::OS);
     println!("Architecture: {}", std::env::consts::ARCH);
-    println!("Cache: {}", downloader::get_cache_dir(None)?.display());
+    println!("Cache: {}", downloader::get_cache_dir(cache_dir)?.display());
 
     let cache = downloader::get_cache_dir(None)?;
     for name in ["cmake", "ninja", "arm-gcc", "pico-sdk", "picotool"] {
