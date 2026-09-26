@@ -44,8 +44,8 @@ pub async fn build_project(path: &str, output: &str, profile: &str, skip_deps_ch
         .env("PICO_SDK_PATH", &sdk)
         .env("PICO_TOOLCHAIN_PATH", &arm_bin)
         .env("PATH", &path_env)
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     run(&mut configure, "CMake configure").await?;
 
     let mut build = Command::new(ninja);
@@ -155,10 +155,42 @@ fn find_dir_containing(root: &Path, name: &str) -> Result<PathBuf> {
 }
 
 async fn run(command: &mut Command, label: &str) -> Result<()> {
-    let status = command.status().await
+    let output = command.output().await
         .with_context(|| format!("failed to start {}", label))?;
-    anyhow::ensure!(status.success(), "{} failed with exit code {:?}", label, status.code());
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    print!("{stdout}");
+    eprint!("{stderr}");
+
+    if !output.status.success() {
+        report_compiler_diagnostics(&stderr);
+        report_compiler_diagnostics(&stdout);
+        anyhow::bail!("{} failed with exit code {:?}", label, output.status.code());
+    }
     Ok(())
+}
+
+fn report_compiler_diagnostics(output: &str) {
+    for line in output.lines() {
+        let lower = line.to_ascii_lowercase();
+        let kind = if lower.contains(": error:") || lower.contains("fatal error") {
+            Some("ERROR")
+        } else if lower.contains(": warning:") {
+            Some("WARNING")
+        } else {
+            None
+        };
+        if let Some(kind) = kind {
+            if let Some((location, message)) = line.split_once(": error:") {
+                println!("\n[{kind}] {location}\n  {message}");
+            } else if let Some((location, message)) = line.split_once(": warning:") {
+                println!("\n[{kind}] {location}\n  {message}");
+            } else {
+                println!("\n[{kind}] {line}");
+            }
+        }
+    }
 }
 
 fn report_artifacts(build_dir: &Path, project_name: &str) {
