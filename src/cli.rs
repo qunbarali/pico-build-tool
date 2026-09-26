@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 use std::env;
 
 #[derive(Parser)]
-#[command(name = "pico-build", version = "1.2.0", about = "Standalone Raspberry Pi Pico build tool")]
+#[command(name = "pico-build", version = "1.3.0", about = "Standalone Raspberry Pi Pico build tool")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
