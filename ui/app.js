@@ -1,22 +1,49 @@
 const invoke = window.__TAURI__.core.invoke;
+const listen = window.__TAURI__.event.listen;
 const output = document.getElementById("output");
 const status = document.getElementById("status");
 const build = document.getElementById("build");
 
+let outputListener;
+
+async function startOutputStream() {
+  if (outputListener) {
+    await outputListener();
+  }
+
+  outputListener = await listen("pico-build-output", (event) => {
+    const payload = event.payload;
+    if (!payload || typeof payload.text !== "string") return;
+    output.textContent += payload.text;
+    output.scrollTop = output.scrollHeight;
+  });
+}
+
+function resetOutput() {
+  output.textContent = "";
+}
+
 function render(result) {
-  const text = [result.stdout, result.stderr].filter(Boolean).join("\n");
-  output.textContent = text || "Command completed without console output.";
-  status.textContent = result.success ? "Completed successfully." : "Build/command failed. See diagnostics below.";
+  if (!output.textContent.trim()) {
+    output.textContent = [result.stdout, result.stderr].filter(Boolean).join("\n");
+  }
+  status.textContent = result.success
+    ? "Completed successfully."
+    : "Build/command failed. See diagnostics above.";
   status.style.color = result.success ? "#7ee2a8" : "#ff8e9e";
 }
 
 async function run(args) {
   status.textContent = "Running...";
   status.style.color = "#7ed8ff";
+  resetOutput();
+
   try {
-    render(await invoke("run_cli", { args }));
+    await startOutputStream();
+    const result = await invoke("run_cli", { args });
+    render(result);
   } catch (error) {
-    output.textContent = String(error);
+    output.textContent += String(error);
     status.textContent = "Could not start the build engine.";
     status.style.color = "#ff8e9e";
   }
@@ -38,7 +65,7 @@ document.querySelectorAll("[data-action]").forEach((button) => {
 });
 
 document.getElementById("clear").addEventListener("click", () => {
-  output.textContent = "No command has been run yet.";
+  resetOutput();
   status.textContent = "Ready.";
   status.style.color = "#7ed8ff";
 });
