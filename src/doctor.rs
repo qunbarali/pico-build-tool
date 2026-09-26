@@ -8,7 +8,7 @@ pub async fn run(project: Option<&str>, cache_dir: Option<&str>) -> Result<()> {
     println!("Architecture: {}", std::env::consts::ARCH);
     println!("Cache: {}", downloader::get_cache_dir(cache_dir)?.display());
 
-    let cache = downloader::get_cache_dir(None)?;
+    let cache = downloader::get_cache_dir(cache_dir)?;
     for name in ["cmake", "ninja", "arm-gcc", "pico-sdk", "picotool"] {
         let ready = cache.join(name).is_dir();
         println!("  {:<12} {}", name, if ready { "installed" } else { "missing" });
