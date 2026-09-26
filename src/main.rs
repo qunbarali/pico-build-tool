@@ -3,6 +3,7 @@ mod cli;
 mod config;
 mod downloader;
 mod doctor;
+mod embedded;
 mod github;
 mod logger;
 mod project;
