@@ -1,6 +1,6 @@
 [package]
 name = "pico-build-tool"
-version = "1.2.0"
+version = "1.3.0"
 edition = "2021"
 authors = ["Pico Build Tool Contributors"]
 description = "Standalone Rust build tool for Raspberry Pi Pico and Pico 2 projects"
