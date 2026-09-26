@@ -8,6 +8,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
+use crate::embedded;
 use walkdir::WalkDir;
 
 const CMAKE_SHA256: &str = "4d52ebab7193a698651639ed80d8d04fd903358843572cf44c7fd234cb7c26ab";
@@ -42,6 +43,7 @@ pub async fn setup_dependencies(force: bool, cache_dir: Option<&str>) -> Result<
     if !cfg!(windows) { return Err(anyhow!("the bundled dependency installer currently supports Windows x64 only")); }
     let cache = get_cache_dir(cache_dir)?;
     fs::create_dir_all(&cache)?;
+    install_embedded_dependencies(force, &cache)?;
     for dep in DEPENDENCIES {
         let target = cache.join(dep.name);
         if !force && dependency_ready(dep, &target) {
@@ -99,6 +101,40 @@ fn dependency_ready(dep: &Dependency, root: &Path) -> bool {
         Some(exe) => find_named(root, exe).is_some(),
         None => root_contains_sdk(root),
     }
+}
+
+fn install_embedded_dependencies(force: bool, cache: &Path) -> Result<()> {
+    for embedded_dep in embedded::dependencies() {
+        let Some(dep) = DEPENDENCIES.iter().find(|d| d.name == embedded_dep.name) else { continue };
+        let target = cache.join(dep.name);
+        if !force && dependency_ready(dep, &target) { continue; }
+        install_archive(dep, embedded_dep.archive, cache)?;
+        info!("Installed bundled {} {}", dep.name, dep.version);
+    }
+    Ok(())
+}
+
+fn install_archive(dep: &Dependency, bytes: &[u8], cache: &Path) -> Result<()> {
+    let actual = hex_string(&Sha256::digest(bytes));
+    if let Some(expected) = dep.sha256 {
+        anyhow::ensure!(actual.eq_ignore_ascii_case(expected),
+            "bundled checksum mismatch for {}: expected {}, got {}", dep.name, expected, actual);
+    }
+    let stage = cache.join(format!(".{}.staging", dep.name));
+    if stage.exists() { fs::remove_dir_all(&stage)?; }
+    fs::create_dir_all(&stage)?;
+    let archive = NamedTempFile::new()?;
+    fs::write(archive.path(), bytes)?;
+    extract_zip(archive.path(), &stage).with_context(|| format!("failed to extract bundled {}", dep.name))?;
+    let target = cache.join(dep.name);
+    if target.exists() { fs::remove_dir_all(&target)?; }
+    fs::rename(&stage, &target)?;
+    let marker = serde_json::json!({
+        "name": dep.name, "version": dep.version, "url": dep.url, "sha256": actual, "bundled": true
+    });
+    fs::write(target.join(".pico-build-tool.json"), serde_json::to_vec_pretty(&marker)?)?;
+    anyhow::ensure!(dependency_ready(dep, &target), "bundled dependency '{}' failed validation", dep.name);
+    Ok(())
 }
 
 async fn download_and_extract(dep: &Dependency, cache: &Path) -> Result<()> {
