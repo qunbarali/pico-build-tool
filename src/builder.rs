@@ -5,6 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tokio::process::Command;
+use walkdir::WalkDir;
 
 use crate::config;
 use crate::downloader::{self, DependencyPaths};
@@ -20,7 +21,8 @@ pub async fn build_project(path: &str, output: &str, profile: &str, skip_deps_ch
         downloader::dependency_paths()?
     };
 
-    ensure_import_file(&project, &deps.pico_sdk)?;
+    let sdk = find_sdk_root(&deps.pico_sdk)?;
+    ensure_import_file(&project, &sdk)?;
     let cfg = config::load(&project)?;
     let build_dir = resolve_output(&project, output);
     fs::create_dir_all(&build_dir)?;
@@ -39,7 +41,7 @@ pub async fn build_project(path: &str, output: &str, profile: &str, skip_deps_ch
         .arg("-G").arg("Ninja")
         .arg(format!("-DCMAKE_BUILD_TYPE={profile}"))
         .arg(format!("-DPICO_BOARD={}", cfg.pico_board))
-        .env("PICO_SDK_PATH", &deps.pico_sdk)
+        .env("PICO_SDK_PATH", &sdk)
         .env("PICO_TOOLCHAIN_PATH", &arm_bin)
         .env("PATH", &path_env)
         .stdout(Stdio::inherit())
@@ -49,7 +51,7 @@ pub async fn build_project(path: &str, output: &str, profile: &str, skip_deps_ch
     let mut build = Command::new(ninja);
     build.current_dir(&build_dir)
         .arg("-v")
-        .env("PICO_SDK_PATH", &deps.pico_sdk)
+        .env("PICO_SDK_PATH", &sdk)
         .env("PICO_TOOLCHAIN_PATH", &arm_bin)
         .env("PATH", &path_env)
         .stdout(Stdio::inherit())
@@ -89,6 +91,17 @@ fn normalize_profile(profile: &str) -> Result<&'static str> {
 fn resolve_output(project: &Path, output: &str) -> PathBuf {
     let p = PathBuf::from(output);
     if p.is_absolute() { p } else { project.join(p) }
+}
+
+fn find_sdk_root(root: &Path) -> Result<PathBuf> {
+    if root.join("pico_sdk_init.cmake").is_file() {
+        return Ok(root.to_path_buf());
+    }
+    WalkDir::new(root).max_depth(3).follow_links(false).into_iter()
+        .filter_map(Result::ok)
+        .find(|e| e.file_type().is_file() && e.file_name() == "pico_sdk_init.cmake")
+        .and_then(|e| e.path().parent().map(Path::to_path_buf))
+        .ok_or_else(|| anyhow!("pico_sdk_init.cmake not found under {}", root.display()))
 }
 
 fn ensure_import_file(project: &Path, sdk: &Path) -> Result<()> {
