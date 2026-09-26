@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use std::env;
 
 #[derive(Parser)]
 #[command(name = "pico-build", version = "1.2.0", about = "Standalone Raspberry Pi Pico build tool")]
@@ -26,7 +27,7 @@ pub enum Commands {
         #[arg(short, long, default_value = "./pico-projects")]
         output: String,
     },
-    /// Build an existing Pico project
+    /// Build an existing Pico project and produce a flashable UF2
     Build {
         #[arg(value_name = "PROJECT_PATH", default_value = ".")]
         path: String,
@@ -37,7 +38,7 @@ pub enum Commands {
         #[arg(long)]
         skip_deps_check: bool,
     },
-    /// Clone and build a GitHub repository
+    /// Clone and build a GitHub repository, leaving the flashable artifacts on disk
     CloneBuild {
         repo_url: String,
         #[arg(short, long, env = "GITHUB_TOKEN")]
@@ -69,7 +70,7 @@ pub enum Commands {
         #[arg(long, default_value = "pico")]
         board: String,
     },
-    /// Convert an ELF to UF2 using the bundled picotool
+    /// Convert an ELF to a flashable UF2 using the bundled picotool
     GenerateUf2 {
         elf_file: String,
         #[arg(short, long)]
@@ -94,11 +95,13 @@ impl Cli {
             Commands::Build { path, output, profile, skip_deps_check } =>
                 crate::builder::build_project(path, output, profile, *skip_deps_check).await,
             Commands::CloneBuild { repo_url, token, branch, build_output, profile } => {
+                let output = env::current_dir()?.join(build_output);
                 let workspace = tempfile::tempdir()?;
                 let clone_path = workspace.path().join("project");
                 let clone_path_str = clone_path.to_string_lossy().to_string();
+                let output_str = output.to_string_lossy().to_string();
                 crate::github::clone_repository(repo_url, token.as_deref(), branch.as_deref(), &clone_path_str).await?;
-                crate::builder::build_project(&clone_path_str, build_output, profile, false).await
+                crate::builder::build_project(&clone_path_str, &output_str, profile, false).await
             }
             Commands::Setup { force, cache_dir } =>
                 crate::downloader::setup_dependencies(*force, cache_dir.as_deref()).await,
