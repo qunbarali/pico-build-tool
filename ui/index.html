@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Pico Build Tool</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">PICO DEVELOPMENT SUITE</div>
+      <h1>Pico Build Tool</h1>
+    </div>
+    <div class="badge">Windows Desktop · Tauri 2</div>
+  </header>
+
+  <main class="shell">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">BUILD · VALIDATE · FLASH</p>
+        <h2>Turn Pico source into a flashable UF2.</h2>
+        <p class="muted">The desktop application includes the Pico build engine and its required toolchain. You do not need to install the Pico SDK, CMake, Ninja, ARM GCC or picotool separately.</p>
+      </div>
+      <div class="hero-card">
+        <span>ENGINE</span>
+        <strong>1.3.0</strong>
+        <small>Self-contained build pipeline</small>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h3>Build project</h3>
+          <p class="muted">Enter a local Pico project folder.</p>
+        </div>
+        <select id="profile">
+          <option value="release">Release</option>
+          <option value="debug">Debug</option>
+        </select>
+      </div>
+      <div class="row">
+        <input id="project" value="." placeholder="C:\Projects\my-pico-project">
+        <button id="build">Build UF2</button>
+      </div>
+      <div id="status" class="status">Ready.</div>
+    </section>
+
+    <section class="grid">
+      <button class="tool" data-action="setup"><span>01</span><b>Prepare toolchain</b><small>Verify bundled dependencies</small></button>
+      <button class="tool" data-action="status"><span>02</span><b>Toolchain status</b><small>Inspect installed components</small></button>
+      <button class="tool" data-action="doctor"><span>03</span><b>Run diagnostics</b><small>Check environment and project</small></button>
+    </section>
+
+    <section class="panel output-panel">
+      <div class="panel-head">
+        <div>
+          <h3>Build output</h3>
+          <p class="muted">Compiler and CMake diagnostics appear here.</p>
+        </div>
+        <button id="clear" class="secondary">Clear</button>
+      </div>
+      <pre id="output">No command has been run yet.</pre>
+    </section>
+  </main>
+  <script src="./app.js"></script>
+</body>
+</html>
