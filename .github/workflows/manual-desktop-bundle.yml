@@ -20,15 +20,17 @@ jobs:
         shell: pwsh
         run: |
           cargo install tauri-cli --version "^2.11.0" --locked
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-desktop-build.ps1
           cargo tauri build
 
       - name: Package desktop artifacts
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item target/release/bundle/nsis/*.exe dist/
-          Copy-Item target/release/bundle/nsis/*.exe dist/pico-build-tool-windows-x64-setup.exe -Force
+          $installer = Get-ChildItem target/release/bundle/nsis -Filter *.exe | Select-Object -First 1
+          if (-not $installer) { throw "Tauri NSIS installer was not produced" }
+          Copy-Item $installer.FullName dist/pico-build-tool-windows-x64-setup.exe -Force
+          Copy-Item target/release/pico-build-desktop.exe dist/PicoBuildTool.exe -Force
+          (Get-FileHash dist/PicoBuildTool.exe -Algorithm SHA256).Hash | Set-Content dist/PicoBuildTool.exe.sha256
           (Get-FileHash dist/pico-build-tool-windows-x64-setup.exe -Algorithm SHA256).Hash | Set-Content dist/pico-build-tool-windows-x64-setup.exe.sha256
           Compress-Archive -Path dist/* -DestinationPath pico-build-tool-windows-x64.zip -Force
 
