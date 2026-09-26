@@ -341,11 +341,11 @@ mod tests {
     #[test]
     fn parses_gcc_error_with_windows_path() {
         let diagnostics = parse_diagnostics(
-            r#"C:\\projects\\blink\\src\\main.c:27:5: error: 'foo' undeclared"#
+            r#"C:\projects\blink\src\main.c:27:5: error: 'foo' undeclared"#
         );
         assert_eq!(diagnostics, vec![Diagnostic {
             severity: "ERROR",
-            file: Some(r#"C:\\projects\\blink\\src\\main.c"#.to_string()),
+            file: Some(r#"C:\projects\blink\src\main.c"#.to_string()),
             line: Some(27),
             column: Some(5),
             message: "'foo' undeclared".to_string(),
@@ -375,7 +375,7 @@ mod tests {
     #[test]
     fn removes_duplicate_diagnostics() {
         let diagnostics = parse_diagnostics(
-            "src/main.c:7:2: error: expected ';'\\nsrc/main.c:7:2: error: expected ';'"
+            "src/main.c:7:2: error: expected ';'\nsrc/main.c:7:2: error: expected ';'"
         );
         assert_eq!(diagnostics.len(), 1);
     }
