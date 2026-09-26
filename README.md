@@ -22,9 +22,9 @@ A standalone Windows x64 desktop application and Rust build engine for building 
 
 ## Desktop application
 
-The production Windows application uses Tauri 2. Tauri bundles the GUI and the self-contained `pico-build` engine as a sidecar executable. The resulting Windows build includes a standalone application EXE and an NSIS setup EXE. Tauri's Windows distribution produces setup executables or MSI packages; this project uses the setup EXE target. citeturn4search1
+The production Windows application uses Tauri 2. Tauri bundles the GUI and the self-contained `pico-build` engine as a sidecar executable. The resulting Windows build includes a standalone application EXE and an NSIS setup EXE. Tauri's Windows distribution produces setup executables or MSI packages; this project uses the setup EXE target.
 
-The sidecar pattern is intentional: the GUI does not require a separate Pico SDK, CMake, Ninja, ARM GCC or picotool installation. Tauri supports bundling external binaries as sidecars and executing them from the application. citeturn3search0
+The sidecar pattern is intentional: the GUI does not require a separate Pico SDK, CMake, Ninja, ARM GCC or picotool installation. Tauri supports bundling external binaries as sidecars and executing them from the application.
 
 ## One-time dependency preparation
 
@@ -37,7 +37,7 @@ cargo install tauri-cli --version "^2.11.0" --locked
 cargo tauri build
 ```
 
-Tauri 2's official setup supports installing the CLI with Cargo and building with `cargo tauri build`. citeturn4search0
+Tauri 2's official setup supports installing the CLI with Cargo and building with `cargo tauri build`.
 
 ## Quick start
 
