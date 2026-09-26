@@ -1,181 +1,104 @@
-use anyhow::{Result, Context, anyhow};
-use std::path::{Path, PathBuf};
-use std::fs;
+use anyhow::{anyhow, Result};
 use log::info;
-use serde::{Deserialize, Serialize};
-use toml;
+use std::fs;
+use std::path::Path;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ProjectConfig {
-    pub name: String,
-    pub version: String,
-    pub description: Option<String>,
-    pub pico_board: String,
-}
+use crate::config::{self, ProjectConfig};
 
-impl Default for ProjectConfig {
-    fn default() -> Self {
-        Self {
-            name: "pico-project".to_string(),
-            version: "0.1.0".to_string(),
-            description: None,
-            pico_board: "pico".to_string(),
-        }
-    }
-}
+pub async fn init_project(name: &str, board: &str) -> Result<()> {
+    config::validate_board(board)?;
+    let root = Path::new(name);
+    anyhow::ensure!(!root.exists(), "project directory already exists: {}", root.display());
+    fs::create_dir_all(root.join("src"))?;
+    fs::create_dir_all(root.join("include"))?;
 
-/// Initialize a new Pico project with template files
-pub async fn init_project(name: &str, template: Option<&str>) -> Result<()> {
-    let project_dir = Path::new(name);
-    
-    if project_dir.exists() {
-        return Err(anyhow!("Project directory '{}' already exists", name));
-    }
-    
-    info!("Initializing new Pico project: {}", name);
-    
-    // Create project structure
-    fs::create_dir_all(project_dir)?;
-    fs::create_dir_all(project_dir.join("src"))?;
-    fs::create_dir_all(project_dir.join("include"))?;
-    
-    // Create CMakeLists.txt
-    let cmake_content = generate_cmake_template(name);
-    fs::write(project_dir.join("CMakeLists.txt"), cmake_content)?;
-    
-    // Create main.c
-    let main_c = generate_main_c_template();
-    fs::write(project_dir.join("src/main.c"), main_c)?;
-    
-    // Create project config
     let config = ProjectConfig {
-        name: name.to_string(),
+        name: root.file_name().and_then(|s| s.to_str()).unwrap_or(name).to_string(),
+        pico_board: board.to_string(),
         ..Default::default()
     };
-    let config_str = toml::to_string_pretty(&config)?;
-    fs::write(project_dir.join("pico.toml"), config_str)?;
-    
-    // Create .gitignore
-    fs::write(project_dir.join(".gitignore"), generate_gitignore())?;
-    
-    // Create README.md
-    fs::write(project_dir.join("README.md"), generate_readme(name))?;
-    
-    info!("✓ Project initialized at: {}", project_dir.display());
-    info!("Run 'pico-build build {}' to build the project", name);
-    
+
+    fs::write(root.join("CMakeLists.txt"), generate_cmake(&config.name))?;
+    fs::write(root.join("src/main.c"), generate_main_c())?;
+    fs::write(root.join("pico.toml"), toml::to_string_pretty(&config)?)?;
+    fs::write(root.join(".gitignore"), GITIGNORE)?;
+    fs::write(root.join("README.md"), generate_readme(&config))?;
+
+    info!("Initialized {}", root.display());
     Ok(())
 }
 
-fn generate_cmake_template(project_name: &str) -> String {
-    format!(r#"cmake_minimum_required(VERSION 3.12)
+fn generate_cmake(name: &str) -> String {
+    format!(r#"cmake_minimum_required(VERSION 3.13)
 
-# Initialize the SDK
 include(${{CMAKE_CURRENT_LIST_DIR}}/pico_sdk_import.cmake)
 
-project({} C CXX ASM)
+project({name} C CXX ASM)
 
-# Initialize the Pico SDK
 pico_sdk_init()
 
-# Add executable. Default name is the project name, version 0.1
 add_executable(${{PROJECT_NAME}}
     src/main.c
 )
 
-# Pull in common dependencies
 target_link_libraries(${{PROJECT_NAME}} pico_stdlib)
-
-# Create map/bin/hex/uf2 file in addition to ELF.
 pico_add_extra_outputs(${{PROJECT_NAME}})
-"#, project_name)
+"#)
 }
 
-fn generate_main_c_template() -> String {
-    r#"#include <stdio.h>
-#include "pico/stdlib.h"
+fn generate_main_c() -> &'static str {
+    r#"#include "pico/stdlib.h"
+#include <stdio.h>
 
-int main() {
-    // Initialize stdio
+int main(void) {
     stdio_init_all();
-    
-    printf("Hello, Raspberry Pi Pico!\n");
-    
-    // Set LED GPIO (GP25 on standard Pico)
-    const uint LED_PIN = PICO_DEFAULT_LED_PIN;
-    gpio_init(LED_PIN);
-    gpio_set_dir(LED_PIN, GPIO_OUT);
-    
-    while (1) {
-        gpio_put(LED_PIN, 1);
+    const uint led = PICO_DEFAULT_LED_PIN;
+    gpio_init(led);
+    gpio_set_dir(led, GPIO_OUT);
+
+    while (true) {
+        gpio_put(led, 1);
         sleep_ms(250);
-        gpio_put(LED_PIN, 0);
+        gpio_put(led, 0);
         sleep_ms(250);
     }
-    
-    return 0;
 }
-"#.to_string()
-}
-
-fn generate_gitignore() -> &'static str {
-    r#"# Build directories
-build/
-*.elf
-*.uf2
-*.hex
-*.bin
-
-# CMake
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-Makefile
-
-# IDE
-.vscode/
-.idea/
-*.code-workspace
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Dependencies
-pico-sdk/
 "#
 }
 
-fn generate_readme(project_name: &str) -> String {
-    format!(r#"# {}
+const GITIGNORE: &str = r#"# Pico build output
+build/
+*.elf
+*.uf2
+*.bin
+*.hex
+*.map
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+build.ninja
+.ninja_deps
+.ninja_log
 
-A Raspberry Pi Pico project built with the pico-build-tool.
+# Tool-generated SDK import file
+pico_sdk_import.cmake
+"#;
 
-## Building
+fn generate_readme(config: &ProjectConfig) -> String {
+    format!(r#"# {name}
 
-```bash
-pico-build build .
-```
+Raspberry Pi Pico project managed by pico-build-tool.
 
-## Flashing
+## Build
 
-1. Connect your Pico to your computer via USB while holding the BOOTSEL button
-2. Copy the generated UF2 file from `build/` to the RPI-RP2 drive
+    pico-build build .
 
-## Requirements
+The tool installs its pinned Windows build dependencies into ~/.pico-build-tool/cache.
 
-- pico-build-tool (handles all dependencies)
+## Board
 
-## Project Structure
+{board}
 
-```
-{}
-├── src/
-│   └── main.c          # Main program
-├── include/            # Header files
-├── CMakeLists.txt      # Build configuration
-├── pico.toml          # Project configuration
-└── README.md          # This file
-```
-"#, project_name, project_name)
+Change pico_board in pico.toml to another board supported by the installed Pico SDK.
+"#, name = config.name, board = config.pico_board)
 }
