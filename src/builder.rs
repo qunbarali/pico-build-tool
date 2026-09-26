@@ -18,7 +18,7 @@ pub async fn build_project(path: &str, output: &str, profile: &str, skip_deps_ch
         downloader::dependency_paths(cache_dir)?
     } else {
         downloader::setup_dependencies(false, cache_dir).await?;
-        downloader::dependency_paths()?
+        downloader::dependency_paths(cache_dir)?
     };
 
     let sdk = find_sdk_root(&deps.pico_sdk)?;
@@ -76,7 +76,10 @@ fn require_artifacts(build_dir: &Path, project_name: &str) -> Result<BuildArtifa
     let uf2 = build_dir.join(format!("{project_name}.uf2"));
     anyhow::ensure!(elf.is_file(), "build succeeded but ELF was not produced: {}", elf.display());
     anyhow::ensure!(uf2.is_file(), "build succeeded but flashable UF2 was not produced: {}", uf2.display());
-    anyhow::ensure!(fs::metadata(&uf2)?.len() > 0, "flashable UF2 is empty: {}", uf2.display());
+    let metadata = fs::metadata(&uf2)?;
+    anyhow::ensure!(metadata.len() > 0, "flashable UF2 is empty: {}", uf2.display());
+    anyhow::ensure!(metadata.len() % 512 == 0, "UF2 has invalid size ({} bytes): {}", metadata.len(), uf2.display());
+    validate_uf2_blocks(&uf2)?;
     Ok(BuildArtifacts { elf, uf2 })
 }
 
@@ -191,6 +194,22 @@ fn report_compiler_diagnostics(output: &str) {
             }
         }
     }
+}
+
+fn validate_uf2_blocks(path: &Path) -> Result<()> {
+    const BLOCK_SIZE: usize = 512;
+    const MAGIC0: u32 = 0x0A32_4655;
+    const MAGIC1: u32 = 0x9E5D_5157;
+    let bytes = fs::read(path).with_context(|| format!("failed to read UF2 {}", path.display()))?;
+    anyhow::ensure!(bytes.len() >= BLOCK_SIZE, "UF2 is too small to be valid: {}", path.display());
+    for (index, block) in bytes.chunks_exact(BLOCK_SIZE).enumerate() {
+        let magic0 = u32::from_le_bytes(block[0..4].try_into().unwrap());
+        let magic1 = u32::from_le_bytes(block[4..8].try_into().unwrap());
+        let end_magic = u32::from_le_bytes(block[508..512].try_into().unwrap());
+        anyhow::ensure!(magic0 == MAGIC0 && magic1 == MAGIC1 && end_magic == MAGIC1,
+            "invalid UF2 block {} in {}", index, path.display());
+    }
+    Ok(())
 }
 
 fn report_artifacts(build_dir: &Path, project_name: &str) {
