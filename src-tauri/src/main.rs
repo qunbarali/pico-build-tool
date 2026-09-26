@@ -1,5 +1,12 @@
 use serde::Serialize;
+use tauri::Emitter;
 use tauri_plugin_shell::{process::CommandEvent, ShellExt};
+
+#[derive(Debug, Clone, Serialize)]
+struct OutputEvent {
+    stream: &'static str,
+    text: String,
+}
 
 #[derive(Debug, Serialize)]
 struct CliResult {
@@ -17,16 +24,61 @@ async fn run_cli(app: tauri::AppHandle, args: Vec<String>) -> Result<CliResult, 
         .map_err(|e| format!("failed to prepare pico-build sidecar: {e}"))?
         .args(args);
 
-    let output = command
-        .output()
-        .await
-        .map_err(|e| format!("failed to execute pico-build: {e}"))?;
+    let (mut events, _child) = command
+        .spawn()
+        .map_err(|e| format!("failed to start pico-build: {e}"))?;
+
+    let mut stdout = String::new();
+    let mut stderr = String::new();
+    let mut code = None;
+
+    while let Some(event) = events.recv().await {
+        match event {
+            CommandEvent::Stdout(bytes) => {
+                let text = String::from_utf8_lossy(&bytes).into_owned();
+                stdout.push_str(&text);
+                let _ = app.emit(
+                    "pico-build-output",
+                    OutputEvent {
+                        stream: "stdout",
+                        text,
+                    },
+                );
+            }
+            CommandEvent::Stderr(bytes) => {
+                let text = String::from_utf8_lossy(&bytes).into_owned();
+                stderr.push_str(&text);
+                let _ = app.emit(
+                    "pico-build-output",
+                    OutputEvent {
+                        stream: "stderr",
+                        text,
+                    },
+                );
+            }
+            CommandEvent::Error(message) => {
+                stderr.push_str(&message);
+                stderr.push('\n');
+                let _ = app.emit(
+                    "pico-build-output",
+                    OutputEvent {
+                        stream: "stderr",
+                        text: format!("{message}\n"),
+                    },
+                );
+            }
+            CommandEvent::Terminated(payload) => {
+                code = payload.code;
+            }
+            _ => {}
+        }
+    }
 
     Ok(CliResult {
-        code: output.status.code(),
-        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
-        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
-        success: output.status.success(),
+        code,
+        success: code == Some(0),
+        stdout,
+        stderr,
     })
 }
 
