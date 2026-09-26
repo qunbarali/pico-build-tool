@@ -14,49 +14,27 @@ jobs:
         shell: pwsh
         run: |
           rustup toolchain install stable --profile minimal
-          rustup default stable
+          rustup default stable-msvc
 
-      - name: Download pinned dependency archives
+      - name: Build Tauri 2 desktop application
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force embedded | Out-Null
-          Invoke-WebRequest -Uri 'https://github.com/Kitware/CMake/releases/download/v4.4.3/cmake-4.4.3-windows-x86_64.zip' -OutFile 'embedded/cmake.zip'
-          Invoke-WebRequest -Uri 'https://github.com/ninja-build/ninja/releases/download/v1.13.2/ninja-win.zip' -OutFile 'embedded/ninja.zip'
-          Invoke-WebRequest -Uri 'https://developer.arm.com/-/media/Files/downloads/gnu/15.2.rel1/binrel/arm-gnu-toolchain-15.2.rel1-mingw-w64-i686-arm-none-eabi.zip' -OutFile 'embedded/arm-gcc.zip'
-          Invoke-WebRequest -Uri 'https://github.com/raspberrypi/pico-sdk/archive/refs/tags/2.3.1.zip' -OutFile 'embedded/pico-sdk.zip'
-          Invoke-WebRequest -Uri 'https://github.com/raspberrypi/pico-sdk-tools/releases/download/v2.3.1-0/picotool-2.3.1-x64-win.zip' -OutFile 'embedded/picotool.zip'
+          cargo install tauri-cli --version "^2.11.0" --locked
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-desktop-build.ps1
+          cargo tauri build
 
-      - name: Verify bundled archive checksums
-        shell: pwsh
-        run: |
-          $expected = @{
-            'embedded/cmake.zip' = '4d52ebab7193a698651639ed80d8d04fd903358843572cf44c7fd234cb7c26ab'
-            'embedded/ninja.zip' = '07fc8261b42b20e71d1720b39068c2e14ffcee6396b76fb7a795fb460b78dc65'
-            'embedded/arm-gcc.zip' = 'b40db54536d2fdf0ff21f4316b56c1fc4d3b782b792c5b298bcbeaf5eccedb96'
-            'embedded/picotool.zip' = '68730be0813f8f35be2cca147cf7f1572662d5dcf0f5ba468e02a6dd9e85db2b'
-          }
-          foreach ($item in $expected.GetEnumerator()) {
-            $actual = (Get-FileHash $item.Key -Algorithm SHA256).Hash.ToLower()
-            if ($actual -ne $item.Value) { throw "Checksum mismatch: $($item.Key)" }
-          }
-
-      - name: Build self-contained desktop EXE
-        shell: pwsh
-        env:
-          PICO_BUNDLE_DIR: ${{ github.workspace }}\embedded
-        run: cargo build --release
-
-      - name: Package desktop application
+      - name: Package desktop artifacts
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item target/release/pico-build.exe dist/pico-build.exe
-          (Get-FileHash dist/pico-build.exe -Algorithm SHA256).Hash | Set-Content dist/pico-build.exe.sha256
-          Compress-Archive -Path dist/pico-build.exe,dist/pico-build.exe.sha256 -DestinationPath pico-build-windows-x64.zip -Force
+          Copy-Item target/release/bundle/nsis/*.exe dist/
+          Copy-Item target/release/bundle/nsis/*.exe dist/pico-build-tool-windows-x64-setup.exe -Force
+          (Get-FileHash dist/pico-build-tool-windows-x64-setup.exe -Algorithm SHA256).Hash | Set-Content dist/pico-build-tool-windows-x64-setup.exe.sha256
+          Compress-Archive -Path dist/* -DestinationPath pico-build-tool-windows-x64.zip -Force
 
       - name: Upload desktop build
         uses: actions/upload-artifact@v4
         with:
-          name: pico-build-windows-x64-self-contained
-          path: pico-build-windows-x64.zip
+          name: pico-build-tool-windows-x64-tauri2
+          path: pico-build-tool-windows-x64.zip
           if-no-files-found: error
