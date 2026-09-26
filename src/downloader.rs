@@ -56,8 +56,8 @@ pub async fn setup_dependencies(force: bool, cache_dir: Option<&str>) -> Result<
     Ok(())
 }
 
-pub async fn check_status() -> Result<()> {
-    let cache = get_cache_dir(None)?;
+pub async fn check_status(cache_dir: Option<&str>) -> Result<()> {
+    let cache = get_cache_dir(cache_dir)?;
     println!("Pico Build Tool dependency status");
     println!("Cache: {}", cache.display());
     for dep in DEPENDENCIES {
@@ -68,8 +68,8 @@ pub async fn check_status() -> Result<()> {
     Ok(())
 }
 
-pub fn dependency_paths() -> Result<DependencyPaths> {
-    let cache = get_cache_dir(None)?;
+pub fn dependency_paths(cache_dir: Option<&str>) -> Result<DependencyPaths> {
+    let cache = get_cache_dir(cache_dir)?;
     let find = |name: &str| -> Result<PathBuf> {
         let dep = DEPENDENCIES.iter().find(|d| d.name == name).unwrap();
         let root = cache.join(name);
