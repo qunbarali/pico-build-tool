@@ -13,6 +13,10 @@ pub struct Cli {
 
     #[arg(short, long, global = true)]
     pub quiet: bool,
+
+    /// Override the private dependency cache location.
+    #[arg(long, global = true, env = "PICO_BUILD_CACHE_DIR")]
+    pub cache_dir: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -93,7 +97,7 @@ impl Cli {
             Commands::Clone { repo_url, token, branch, output } =>
                 crate::github::clone_repository(repo_url, token.as_deref(), branch.as_deref(), output).await,
             Commands::Build { path, output, profile, skip_deps_check } =>
-                crate::builder::build_project(path, output, profile, *skip_deps_check).await,
+                crate::builder::build_project(path, output, profile, *skip_deps_check, self.cache_dir.as_deref()).await,
             Commands::CloneBuild { repo_url, token, branch, build_output, profile } => {
                 let output = env::current_dir()?.join(build_output);
                 let workspace = tempfile::tempdir()?;
@@ -101,15 +105,15 @@ impl Cli {
                 let clone_path_str = clone_path.to_string_lossy().to_string();
                 let output_str = output.to_string_lossy().to_string();
                 crate::github::clone_repository(repo_url, token.as_deref(), branch.as_deref(), &clone_path_str).await?;
-                crate::builder::build_project(&clone_path_str, &output_str, profile, false).await
+                crate::builder::build_project(&clone_path_str, &output_str, profile, false, self.cache_dir.as_deref()).await
             }
             Commands::Setup { force, cache_dir } =>
-                crate::downloader::setup_dependencies(*force, cache_dir.as_deref()).await,
-            Commands::Status => crate::downloader::check_status().await,
-            Commands::Doctor { path } => crate::doctor::run(path.as_deref()).await,
+                crate::downloader::setup_dependencies(*force, cache_dir.as_deref().or(self.cache_dir.as_deref())).await,
+            Commands::Status => crate::downloader::check_status(self.cache_dir.as_deref()).await,
+            Commands::Doctor { path } => crate::doctor::run(path.as_deref(), self.cache_dir.as_deref()).await,
             Commands::Init { name, board } => crate::project::init_project(name, board).await,
             Commands::GenerateUf2 { elf_file, output, family } =>
-                crate::uf2_generator::generate_uf2(elf_file, output.as_deref(), family).await,
+                crate::uf2_generator::generate_uf2(elf_file, output.as_deref(), family, self.cache_dir.as_deref()).await,
             Commands::Clean { path, output } =>
                 crate::builder::clean_project(path, output).await,
         }
