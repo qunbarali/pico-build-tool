@@ -1,6 +1,6 @@
 # pico-build-tool
 
-A standalone Rust CLI for building Raspberry Pi Pico / Pico 2 C/C++ projects on Windows x64.
+A standalone Windows x64 desktop application and Rust build engine for building Raspberry Pi Pico / Pico 2 C/C++ projects.
 
 ## Major capabilities
 
@@ -15,7 +15,29 @@ A standalone Rust CLI for building Raspberry Pi Pico / Pico 2 C/C++ projects on 
 - Safe build cleanup.
 - doctor diagnostics for troubleshooting.
 - Structured compiler/CMake diagnostics with file, line, column, severity, and message.
+- Tauri 2 Windows desktop application with a native installer EXE.
+- Bundled pico-build engine as a Tauri sidecar, so the GUI and build engine ship together.
+- One-time build preparation downloads the required Pico toolchain archives into a local embedded bundle; subsequent builds reuse verified archives.
 - Manual-only GitHub Actions validation.
+
+## Desktop application
+
+The production Windows application uses Tauri 2. Tauri bundles the GUI and the self-contained `pico-build` engine as a sidecar executable. The resulting Windows build includes a standalone application EXE and an NSIS setup EXE. Tauri's Windows distribution produces setup executables or MSI packages; this project uses the setup EXE target. citeturn4search1
+
+The sidecar pattern is intentional: the GUI does not require a separate Pico SDK, CMake, Ninja, ARM GCC or picotool installation. Tauri supports bundling external binaries as sidecars and executing them from the application. citeturn3search0
+
+## One-time dependency preparation
+
+The desktop build runs `scripts/prepare-desktop-build.ps1` automatically before the Tauri build. It creates the local `embedded` bundle and downloads the pinned CMake, Ninja, ARM GNU Toolchain, Pico SDK and picotool archives only when they are missing or invalid. Verified archives are reused on subsequent builds instead of being downloaded again. The archives are then embedded into the `pico-build` sidecar through `PICO_BUNDLE_DIR`.
+
+For a Windows development build:
+
+```powershell
+cargo install tauri-cli --version "^2.11.0" --locked
+cargo tauri build
+```
+
+Tauri 2's official setup supports installing the CLI with Cargo and building with `cargo tauri build`. citeturn4search0
 
 ## Quick start
 
