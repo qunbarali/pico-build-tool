@@ -159,7 +159,7 @@ fn find_dir_containing(root: &Path, name: &str) -> Result<PathBuf> {
 
 async fn run(command: &mut Command, label: &str) -> Result<()> {
     let output = command.output().await
-        .with_context(|| format!("failed to start {}", label))?;
+        .with_context(|| format!("failed to start {label}"))?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -167,34 +167,143 @@ async fn run(command: &mut Command, label: &str) -> Result<()> {
     eprint!("{stderr}");
 
     if !output.status.success() {
-        report_compiler_diagnostics(&stderr);
-        report_compiler_diagnostics(&stdout);
-        anyhow::bail!("{} failed with exit code {:?}", label, output.status.code());
+        let combined = format!("{stdout}{stderr}");
+        report_compiler_diagnostics(&combined);
+        anyhow::bail!("{label} failed with exit code {:?}", output.status.code());
     }
     Ok(())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Diagnostic {
+    severity: &'static str,
+    file: Option<String>,
+    line: Option<u32>,
+    column: Option<u32>,
+    message: String,
+}
+
 fn report_compiler_diagnostics(output: &str) {
-    for line in output.lines() {
-        let lower = line.to_ascii_lowercase();
-        let kind = if lower.contains(": error:") || lower.contains("fatal error") {
-            Some("ERROR")
-        } else if lower.contains(": warning:") {
-            Some("WARNING")
-        } else {
-            None
+    let diagnostics = parse_diagnostics(output);
+    if diagnostics.is_empty() {
+        return;
+    }
+
+    let errors = diagnostics.iter().filter(|d| d.severity == "ERROR").count();
+    let warnings = diagnostics.iter().filter(|d| d.severity == "WARNING").count();
+    println!("\\nBuild diagnostics: {errors} error(s), {warnings} warning(s)");
+
+    for diagnostic in diagnostics {
+        let location = match (&diagnostic.file, diagnostic.line, diagnostic.column) {
+            (Some(file), Some(line), Some(column)) => format!("{file}:{line}:{column}"),
+            (Some(file), Some(line), None) => format!("{file}:{line}"),
+            (Some(file), None, _) => file.clone(),
+            _ => "build system".to_string(),
         };
-        if let Some(kind) = kind {
-            if let Some((location, message)) = line.split_once(": error:") {
-                println!("\n[{kind}] {location}\n  {message}");
-            } else if let Some((location, message)) = line.split_once(": warning:") {
-                println!("\n[{kind}] {location}\n  {message}");
-            } else {
-                println!("\n[{kind}] {line}");
-            }
-        }
+        println!("\\n[{}] {location}\\n  {}", diagnostic.severity, diagnostic.message.trim());
     }
 }
+
+fn parse_diagnostics(output: &str) -> Vec<Diagnostic> {
+    let mut result = Vec::new();
+
+    for line in output.lines() {
+        if let Some(diagnostic) = parse_gcc_diagnostic(line) {
+            push_unique_diagnostic(&mut result, diagnostic);
+            continue;
+        }
+        if let Some(diagnostic) = parse_cmake_diagnostic(line) {
+            push_unique_diagnostic(&mut result, diagnostic);
+        }
+    }
+
+    result
+}
+
+fn push_unique_diagnostic(result: &mut Vec<Diagnostic>, diagnostic: Diagnostic) {
+    if !result.contains(&diagnostic) {
+        result.push(diagnostic);
+    }
+}
+
+fn parse_gcc_diagnostic(line: &str) -> Option<Diagnostic> {
+    let lower = line.to_ascii_lowercase();
+    let (marker, severity) = if let Some(index) = lower.find(": error:") {
+        (index, "ERROR")
+    } else if let Some(index) = lower.find(": warning:") {
+        (index, "WARNING")
+    } else if let Some(index) = lower.find(": fatal error:") {
+        (index, "ERROR")
+    } else {
+        return None;
+    };
+
+    let prefix = line[..marker].trim();
+    let message = line[marker..]
+        .split_once(':')
+        .and_then(|(_, rest)| rest.split_once(':').map(|(_, msg)| msg))
+        .unwrap_or("")
+        .trim()
+        .to_string();
+
+    let (file, line_number, column) = parse_source_location(prefix);
+    Some(Diagnostic {
+        severity,
+        file,
+        line: line_number,
+        column,
+        message: if message.is_empty() { line.trim().to_string() } else { message },
+    })
+}
+
+fn parse_source_location(location: &str) -> (Option<String>, Option<u32>, Option<u32>) {
+    let mut parts = location.rsplitn(3, ':');
+    let last = parts.next().unwrap_or_default();
+    let second = parts.next().unwrap_or_default();
+    let first = parts.next();
+
+    if let (Ok(column), Ok(line)) = (last.parse::<u32>(), second.parse::<u32>()) {
+        if let Some(file) = first {
+            return (Some(file.trim().to_string()), Some(line), Some(column));
+        }
+    }
+
+    let mut parts = location.rsplitn(2, ':');
+    let last = parts.next().unwrap_or_default();
+    let file = parts.next();
+    if let (Some(file), Ok(line)) = (file, last.parse::<u32>()) {
+        return (Some(file.trim().to_string()), Some(line), None);
+    }
+
+    (Some(location.trim().to_string()), None, None)
+}
+
+fn parse_cmake_diagnostic(line: &str) -> Option<Diagnostic> {
+    let lower = line.to_ascii_lowercase();
+    let (needle, severity) = if lower.contains("cmake error at ") {
+        ("cmake error at ", "ERROR")
+    } else if lower.contains("cmake warning at ") {
+        ("cmake warning at ", "WARNING")
+    } else {
+        return None;
+    };
+
+    let start = lower.find(needle)? + needle.len();
+    let location_and_message = line[start..].trim();
+    let colon = location_and_message.rfind(':')?;
+    let location = location_and_message[..colon].trim();
+    let message = location_and_message[colon + 1..].trim();
+
+    let (file, line_number, column) = parse_source_location(location);
+    Some(Diagnostic {
+        severity,
+        file,
+        line: line_number,
+        column,
+        message: message.trim_matches(|c| c == '(' || c == ')').to_string(),
+    })
+}
+
 
 fn validate_uf2_blocks(path: &Path) -> Result<()> {
     const BLOCK_SIZE: usize = 512;
@@ -220,5 +329,53 @@ fn report_artifacts(build_dir: &Path, project_name: &str) {
         build_dir.join(format!("{project_name}.hex")),
     ] {
         if file.exists() { info!("Artifact: {}", file.display()); }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_gcc_error_with_windows_path() {
+        let diagnostics = parse_diagnostics(
+            r#"C:\\projects\\blink\\src\\main.c:27:5: error: 'foo' undeclared"#
+        );
+        assert_eq!(diagnostics, vec![Diagnostic {
+            severity: "ERROR",
+            file: Some(r#"C:\\projects\\blink\\src\\main.c"#.to_string()),
+            line: Some(27),
+            column: Some(5),
+            message: "'foo' undeclared".to_string(),
+        }]);
+    }
+
+    #[test]
+    fn parses_gcc_warning_without_column() {
+        let diagnostics = parse_diagnostics("src/main.c:12: warning: unused variable 'x'");
+        assert_eq!(diagnostics[0].severity, "WARNING");
+        assert_eq!(diagnostics[0].file.as_deref(), Some("src/main.c"));
+        assert_eq!(diagnostics[0].line, Some(12));
+        assert_eq!(diagnostics[0].column, None);
+    }
+
+    #[test]
+    fn parses_cmake_error() {
+        let diagnostics = parse_diagnostics(
+            "CMake Error at CMakeLists.txt:18 (add_executable): Cannot find source file"
+        );
+        assert_eq!(diagnostics[0].severity, "ERROR");
+        assert_eq!(diagnostics[0].file.as_deref(), Some("CMakeLists.txt"));
+        assert_eq!(diagnostics[0].line, Some(18));
+        assert!(diagnostics[0].message.contains("Cannot find source file"));
+    }
+
+    #[test]
+    fn removes_duplicate_diagnostics() {
+        let diagnostics = parse_diagnostics(
+            "src/main.c:7:2: error: expected ';'\\nsrc/main.c:7:2: error: expected ';'"
+        );
+        assert_eq!(diagnostics.len(), 1);
     }
 }
