@@ -58,17 +58,35 @@ pub async fn build_project(path: &str, output: &str, profile: &str, skip_deps_ch
         .stderr(Stdio::inherit());
     run(&mut build, "Ninja build").await?;
 
+    let artifacts = require_artifacts(&build_dir, &cfg.name)?;
     info!("Build complete: {}", build_dir.display());
-    report_artifacts(&build_dir, &cfg.name);
+    info!("Flashable UF2: {}", artifacts.uf2.display());
+    info!("ELF: {}", artifacts.elf.display());
     Ok(())
+}
+
+#[derive(Debug)]
+struct BuildArtifacts {
+    elf: PathBuf,
+    uf2: PathBuf,
+}
+
+fn require_artifacts(build_dir: &Path, project_name: &str) -> Result<BuildArtifacts> {
+    let elf = build_dir.join(format!("{project_name}.elf"));
+    let uf2 = build_dir.join(format!("{project_name}.uf2"));
+    anyhow::ensure!(elf.is_file(), "build succeeded but ELF was not produced: {}", elf.display());
+    anyhow::ensure!(uf2.is_file(), "build succeeded but flashable UF2 was not produced: {}", uf2.display());
+    anyhow::ensure!(fs::metadata(&uf2)?.len() > 0, "flashable UF2 is empty: {}", uf2.display());
+    Ok(BuildArtifacts { elf, uf2 })
 }
 
 pub async fn clean_project(path: &str, output: &str) -> Result<()> {
     let project = config::project_path(path)?;
     let requested = resolve_output(&project, output);
+    let build_root = project.join("build").canonicalize().unwrap_or_else(|_| project.join("build"));
     let build_dir = requested.canonicalize().unwrap_or(requested);
-    anyhow::ensure!(build_dir != project && build_dir.starts_with(&project),
-        "refusing to delete path outside project build tree: {}", build_dir.display());
+    anyhow::ensure!(build_dir != project && build_dir.starts_with(&build_root),
+        "refusing to delete path outside the project build directory: {}", build_dir.display());
 
     if build_dir.exists() {
         fs::remove_dir_all(&build_dir)
