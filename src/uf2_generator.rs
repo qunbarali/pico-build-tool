@@ -4,11 +4,11 @@ use tokio::process::Command;
 
 use crate::downloader;
 
-pub async fn generate_uf2(elf_file: &str, output: Option<&str>, family: &str) -> Result<()> {
+pub async fn generate_uf2(elf_file: &str, output: Option<&str>, family: &str, cache_dir: Option<&str>) -> Result<()> {
     let input = Path::new(elf_file);
     anyhow::ensure!(input.is_file(), "ELF file does not exist: {}", input.display());
 
-    let deps = downloader::dependency_paths()?;
+    let deps = downloader::dependency_paths(cache_dir)?;
     let picotool = downloader::find_named_public(&deps.picotool, "picotool.exe")
         .ok_or_else(|| anyhow!("picotool.exe not found; run 'pico-build setup'"))?;
 
