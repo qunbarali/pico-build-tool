@@ -2,6 +2,7 @@ mod builder;
 mod cli;
 mod config;
 mod downloader;
+mod doctor;
 mod github;
 mod logger;
 mod project;
