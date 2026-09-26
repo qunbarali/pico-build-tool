@@ -228,23 +228,18 @@ fn push_unique_diagnostic(result: &mut Vec<Diagnostic>, diagnostic: Diagnostic) 
 
 fn parse_gcc_diagnostic(line: &str) -> Option<Diagnostic> {
     let lower = line.to_ascii_lowercase();
-    let (marker, severity) = if let Some(index) = lower.find(": error:") {
-        (index, "ERROR")
+    let (marker, token, severity) = if let Some(index) = lower.find(": error:") {
+        (index, ": error:", "ERROR")
     } else if let Some(index) = lower.find(": warning:") {
-        (index, "WARNING")
+        (index, ": warning:", "WARNING")
     } else if let Some(index) = lower.find(": fatal error:") {
-        (index, "ERROR")
+        (index, ": fatal error:", "ERROR")
     } else {
         return None;
     };
 
     let prefix = line[..marker].trim();
-    let message = line[marker..]
-        .split_once(':')
-        .and_then(|(_, rest)| rest.split_once(':').map(|(_, msg)| msg))
-        .unwrap_or("")
-        .trim()
-        .to_string();
+    let message = line[marker + token.len()..].trim().to_string();
 
     let (file, line_number, column) = parse_source_location(prefix);
     Some(Diagnostic {
@@ -370,6 +365,13 @@ mod tests {
         assert_eq!(diagnostics[0].file.as_deref(), Some("CMakeLists.txt"));
         assert_eq!(diagnostics[0].line, Some(18));
         assert!(diagnostics[0].message.contains("Cannot find source file"));
+    }
+
+    #[test]
+    fn parses_fatal_error_message() {
+        let diagnostics = parse_diagnostics("src/main.c:9: fatal error: stdio.h: No such file");
+        assert_eq!(diagnostics[0].severity, "ERROR");
+        assert_eq!(diagnostics[0].message, "stdio.h: No such file");
     }
 
     #[test]
