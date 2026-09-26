@@ -5,6 +5,8 @@ const status = document.getElementById("status");
 const build = document.getElementById("build");
 
 let outputListener;
+let busy = false;
+const actionButtons = [...document.querySelectorAll("[data-action]")];
 
 async function startOutputStream() {
   if (outputListener) {
@@ -34,6 +36,10 @@ function render(result) {
 }
 
 async function run(args) {
+  if (busy) return;
+  busy = true;
+  build.disabled = true;
+  actionButtons.forEach((button) => { button.disabled = true; });
   status.textContent = "Running...";
   status.style.color = "#7ed8ff";
   resetOutput();
@@ -46,15 +52,17 @@ async function run(args) {
     output.textContent += String(error);
     status.textContent = "Could not start the build engine.";
     status.style.color = "#ff8e9e";
+  } finally {
+    busy = false;
+    build.disabled = false;
+    actionButtons.forEach((button) => { button.disabled = false; });
   }
 }
 
 build.addEventListener("click", async () => {
-  build.disabled = true;
   const project = document.getElementById("project").value.trim() || ".";
   const profile = document.getElementById("profile").value;
   await run(["build", project, "--profile", profile]);
-  build.disabled = false;
 });
 
 document.querySelectorAll("[data-action]").forEach((button) => {
