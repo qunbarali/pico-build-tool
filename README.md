@@ -14,6 +14,7 @@ A standalone Rust CLI for building Raspberry Pi Pico / Pico 2 C/C++ projects on 
 - Project scaffolding with pico.toml.
 - Safe build cleanup.
 - doctor diagnostics for troubleshooting.
+- Structured compiler/CMake diagnostics with file, line, column, severity, and message.
 - Manual-only GitHub Actions validation.
 
 ## Quick start
@@ -89,6 +90,8 @@ pico-build status
 ```
 
 Doctor reports platform, architecture, dependency presence, and basic project configuration.
+
+When a build fails, pico-build captures both CMake and Ninja/compiler output and extracts recognized errors and warnings. GCC-style diagnostics such as `src/main.c:27:5: error: ...` are reported with file, line, column, severity, and message; CMake diagnostics such as `CMake Error at CMakeLists.txt:18 ...` are also recognized. Duplicate diagnostics are suppressed while the original build output remains visible.
 
 ## Security
 
