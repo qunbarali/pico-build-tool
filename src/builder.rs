@@ -54,8 +54,8 @@ pub async fn build_project(path: &str, output: &str, profile: &str, skip_deps_ch
         .env("PICO_SDK_PATH", &sdk)
         .env("PICO_TOOLCHAIN_PATH", &arm_bin)
         .env("PATH", &path_env)
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit());
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     run(&mut build, "Ninja build").await?;
 
     let artifacts = require_artifacts(&build_dir, &cfg.name)?;
@@ -294,7 +294,8 @@ fn parse_cmake_diagnostic(line: &str) -> Option<Diagnostic> {
     let location = location_and_message[..colon].trim();
     let message = location_and_message[colon + 1..].trim();
 
-    let (file, line_number, column) = parse_source_location(location);
+    let source_location = location.split_whitespace().next().unwrap_or(location);
+    let (file, line_number, column) = parse_source_location(source_location);
     Some(Diagnostic {
         severity,
         file,
