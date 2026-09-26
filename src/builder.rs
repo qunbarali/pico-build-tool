@@ -10,14 +10,14 @@ use walkdir::WalkDir;
 use crate::config;
 use crate::downloader::{self, DependencyPaths};
 
-pub async fn build_project(path: &str, output: &str, profile: &str, skip_deps_check: bool) -> Result<()> {
+pub async fn build_project(path: &str, output: &str, profile: &str, skip_deps_check: bool, cache_dir: Option<&str>) -> Result<()> {
     let project = config::project_path(path)?;
     let profile = normalize_profile(profile)?;
 
     let deps = if skip_deps_check {
-        downloader::dependency_paths()?
+        downloader::dependency_paths(cache_dir)?
     } else {
-        downloader::setup_dependencies(false, None).await?;
+        downloader::setup_dependencies(false, cache_dir).await?;
         downloader::dependency_paths()?
     };
 
