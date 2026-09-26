@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Pico Build Tool",
+  "version": "1.3.0",
+  "identifier": "com.qunbarali.picobuildtool",
+  "build": {
+    "frontendDist": "../ui",
+    "beforeBuildCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-desktop-build.ps1"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Pico Build Tool",
+        "width": 1180,
+        "height": 760,
+        "minWidth": 980,
+        "minHeight": 620,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    },
+    "withGlobalTauri": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "externalBin": ["binaries/pico-build"],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    }
+  }
+}
