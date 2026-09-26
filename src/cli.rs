@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "pico-build", version = "1.1.0", about = "Standalone Raspberry Pi Pico build tool")]
+#[command(name = "pico-build", version = "1.2.0", about = "Standalone Raspberry Pi Pico build tool")]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -58,6 +58,11 @@ pub enum Commands {
     },
     /// Check the installed toolchain
     Status,
+    /// Run a complete environment and project diagnostic
+    Doctor {
+        #[arg(value_name = "PROJECT_PATH")]
+        path: Option<String>,
+    },
     /// Create a new Pico project
     Init {
         name: String,
@@ -89,16 +94,16 @@ impl Cli {
             Commands::Build { path, output, profile, skip_deps_check } =>
                 crate::builder::build_project(path, output, profile, *skip_deps_check).await,
             Commands::CloneBuild { repo_url, token, branch, build_output, profile } => {
-                let root = std::path::Path::new(build_output);
-                std::fs::create_dir_all(root)?;
-                let clone_dir = tempfile::tempdir_in(root)?;
-                let clone_path = clone_dir.path().to_string_lossy().to_string();
-                crate::github::clone_repository(repo_url, token.as_deref(), branch.as_deref(), &clone_path).await?;
-                crate::builder::build_project(&clone_path, build_output, profile, false).await
+                let workspace = tempfile::tempdir()?;
+                let clone_path = workspace.path().join("project");
+                let clone_path_str = clone_path.to_string_lossy().to_string();
+                crate::github::clone_repository(repo_url, token.as_deref(), branch.as_deref(), &clone_path_str).await?;
+                crate::builder::build_project(&clone_path_str, build_output, profile, false).await
             }
             Commands::Setup { force, cache_dir } =>
                 crate::downloader::setup_dependencies(*force, cache_dir.as_deref()).await,
             Commands::Status => crate::downloader::check_status().await,
+            Commands::Doctor { path } => crate::doctor::run(path.as_deref()).await,
             Commands::Init { name, board } => crate::project::init_project(name, board).await,
             Commands::GenerateUf2 { elf_file, output, family } =>
                 crate::uf2_generator::generate_uf2(elf_file, output.as_deref(), family).await,
