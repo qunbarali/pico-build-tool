@@ -15,6 +15,7 @@ const CMAKE_SHA256: &str = "4d52ebab7193a698651639ed80d8d04fd903358843572cf44c7f
 const NINJA_SHA256: &str = "07fc8261b42b20e71d1720b39068c2e14ffcee6396b76fb7a795fb460b78dc65";
 const ARM_SHA256: &str = "b40db54536d2fdf0ff21f4316b56c1fc4d3b782b792c5b298bcbeaf5eccedb96";
 const PICOTOOL_SHA256: &str = "68730be0813f8f35be2cca147cf7f1572662d5dcf0f5ba468e02a6dd9e85db2b";
+// Pico SDK is currently verified by its version and required SDK marker; its archive hash should be pinned once the release artifact hash is confirmed.
 
 #[derive(Clone, Copy)]
 struct Dependency {
