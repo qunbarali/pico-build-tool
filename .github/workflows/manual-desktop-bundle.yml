@@ -1,0 +1,42 @@
+name: Manual Windows desktop bundle
+
+on:
+  workflow_dispatch:
+
+jobs:
+  desktop-bundle:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        shell: pwsh
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable-msvc
+
+      - name: Build Tauri 2 desktop application
+        shell: pwsh
+        run: |
+          cargo install tauri-cli --version "^2.11.0" --locked
+          cargo tauri build
+
+      - name: Package desktop artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $installer = Get-ChildItem target/release/bundle/nsis -Filter *.exe | Select-Object -First 1
+          if (-not $installer) { throw "Tauri NSIS installer was not produced" }
+          Copy-Item $installer.FullName dist/pico-build-tool-windows-x64-setup.exe -Force
+          Copy-Item target/release/pico-build-desktop.exe dist/PicoBuildTool.exe -Force
+          (Get-FileHash dist/PicoBuildTool.exe -Algorithm SHA256).Hash | Set-Content dist/PicoBuildTool.exe.sha256
+          (Get-FileHash dist/pico-build-tool-windows-x64-setup.exe -Algorithm SHA256).Hash | Set-Content dist/pico-build-tool-windows-x64-setup.exe.sha256
+          Compress-Archive -Path dist/* -DestinationPath pico-build-tool-windows-x64.zip -Force
+
+      - name: Upload desktop build
+        uses: actions/upload-artifact@v4
+        with:
+          name: pico-build-tool-windows-x64-tauri2
+          path: pico-build-tool-windows-x64.zip
+          if-no-files-found: error

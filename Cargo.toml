@@ -1,9 +1,9 @@
 [package]
 name = "pico-build-tool"
-version = "1.0.0"
+version = "1.3.0"
 edition = "2021"
 authors = ["Pico Build Tool Contributors"]
-description = "Standalone Rust-based build tool for Raspberry Pi Pico with bundled dependencies"
+description = "Standalone Rust build tool for Raspberry Pi Pico and Pico 2 projects"
 license = "MIT"
 
 [[bin]]
@@ -11,75 +11,27 @@ name = "pico-build"
 path = "src/main.rs"
 
 [dependencies]
-# CLI and argument parsing
-clap = { version = "4.4", features = ["derive"] }
-clap_complete = "4.4"
-
-# GitHub and Git integration
-git2 = "0.28"
-gitconfig-parser = "0.3"
-reqwest = { version = "0.11", features = ["json"] }
-tokio = { version = "1.35", features = ["full"] }
-
-# Serialization
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive", "env"] }
+env_logger = "0.11"
+futures-util = "0.3"
+git2 = "0.20"
+home = "0.5"
+indicatif = "0.18"
+log = "0.4"
+reqwest = { version = "0.12", default-features = true, features = ["stream", "json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-toml = "0.8"
-yaml-rust = "0.4"
-
-# File operations
-walkdir = "2.4"
-tempfile = "3.8"
 sha2 = "0.10"
-hex = "0.4"
-
-# Logging and error handling
-log = "0.4"
-env_logger = "0.11"
-anyhow = "1.0"
-thiserror = "1.0"
-
-# Process execution
-which = "5.0"
-subprocess = "0.2"
-
-# System utilities
-directories = "5.0"
-home = "0.5"
-regex = "1.10"
-
-# Archive extraction
-zip = "0.6"
-tar = "0.4"
-flate2 = "1.0"
-bzip2 = "0.4"
-
-# HTTP utilities
+tempfile = "3.23"
+tokio = { version = "1.48", features = ["macros", "process", "rt-multi-thread"] }
+toml = "0.9"
 url = "2.5"
-percent-encoding = "2.3"
-
-# Progress and UI
-indicatif = "0.17"
-colored = "2.1"
-prettytable-rs = "0.11"
-
-# Configuration
-config = "0.13"
-
-# Date/Time
-chrono = "0.4"
-
-# UUID and random
-uuid = { version = "1.6", features = ["v4"] }
-rand = "0.8"
-
-# Terminal utilities
-dialoguer = "0.11"
-term_size = "0.3"
+walkdir = "2.5"
+zip = "6.0"
 
 [dev-dependencies]
-mockito = "1.2"
-tempfile = "3.8"
+mockito = "1.7"
 
 [profile.release]
 opt-level = 3
@@ -89,5 +41,3 @@ strip = true
 
 [profile.dev]
 opt-level = 1
-
-[build-dependencies]
